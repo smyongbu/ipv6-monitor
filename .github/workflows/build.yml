@@ -1,0 +1,71 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: IPv6Monitor-windows.exe
+            asset_glob: dist/IPv6Monitor.exe
+          - os: macos-14            # Apple Silicon (arm64) runner
+            artifact: IPv6Monitor-macos-arm64.zip
+            asset_glob: dist/IPv6Monitor-macos-arm64.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller requests
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: pyinstaller --onefile --windowed --name IPv6Monitor --clean --noconfirm "IPv6监控界面.py"
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          pyinstaller --windowed --name IPv6Monitor --clean --noconfirm "IPv6监控界面.py"
+          cd dist
+          zip -r IPv6Monitor-macos-arm64.zip IPv6Monitor.app
+
+      - name: Rename Windows artifact
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Copy-Item dist/IPv6Monitor.exe dist/IPv6Monitor-windows.exe
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            dist/IPv6Monitor-windows.exe
+            dist/IPv6Monitor-macos-arm64.zip
+          if-no-files-found: ignore
+
+      - name: Publish to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/IPv6Monitor-windows.exe
+            dist/IPv6Monitor-macos-arm64.zip
