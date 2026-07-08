@@ -108,6 +108,20 @@ def _normalize_powershell_json(output):
     return data
 
 
+def _hidden_subprocess_kwargs():
+    """Hide helper command windows when the app is packaged as a GUI exe."""
+    if platform.system().lower() != "windows":
+        return {}
+
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = subprocess.SW_HIDE
+    return {
+        "creationflags": subprocess.CREATE_NO_WINDOW,
+        "startupinfo": startupinfo,
+    }
+
+
 def _add_ipv6_choice(choices, seen, interface, ip):
     ip = ip.split("(", 1)[0].strip()
     if "%" in ip:
@@ -131,6 +145,7 @@ def _get_ipv6_choices_from_ipconfig(seen):
             errors="ignore",
             timeout=10,
             check=False,
+            **_hidden_subprocess_kwargs(),
         )
     except Exception:
         return choices
@@ -187,6 +202,7 @@ def get_local_ipv6_choices():
                 errors="ignore",
                 timeout=10,
                 check=False,
+                **_hidden_subprocess_kwargs(),
             )
             if result.returncode == 0:
                 for item in _normalize_powershell_json(result.stdout):
